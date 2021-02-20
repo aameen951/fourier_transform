@@ -1,116 +1,18 @@
-const abs = Math.abs;
-const sin = Math.sin;
-const cos = Math.cos;
-const sqrt = Math.sqrt;
-const pi = Math.PI;
-const tau = 2 * pi;
+/**
+ * This file renders some visualizations about fourier transfer.
+ * To see the code relevant to fourier got to the `draw` function directly.
+ * */
 
-class App
+import { abs, cos, rng2, sin, sum, tau } from './math';
+import { Renderer } from './renderer';
+
+class App extends Renderer
 {
-  canvas = document.createElement('canvas');
-  ctx = this.canvas.getContext('2d')!;
-  width = 0;
-  height = 0;
-  last_time = 0;
-  current_time = 0;
-  dt = 0;
-
-  init(){
-    this.set_dim(900, 600);
-
-    document.body.appendChild(this.canvas);
-
-    requestAnimationFrame((time) => {
-      this.last_time = time / 1000;
-      this.current_time = time / 1000;
-      requestAnimationFrame(this.render_loop.bind(this));
-    });
-  }
-  set_dim(w: number, h: number){
-    this.canvas.width = this.width = w;
-    this.canvas.height = this.height = h;
-  }
-
-  line(x0: number, y0: number, x1: number, y1: number){
-    this.ctx.beginPath();
-    this.ctx.moveTo(x0, y0);
-    this.ctx.lineTo(x1, y1);
-    this.ctx.stroke();
-  }
-
-  draw_func(
-    f: (t: number) => number, 
-    t0: number, t1: number, 
-    zero_pos_x: number,
-    zero_pos_y: number,
-    x_scale: number,
-    y_scale: number,
-  ){
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = 'blue';
-    this.ctx.lineWidth = 1;
-    this.ctx.moveTo(x_scale*t0+zero_pos_x, 0+zero_pos_y);
-    this.ctx.lineTo(x_scale*t1+zero_pos_x, 0+zero_pos_y);
-    for(let t = t0; t <= t1; t += 1)
-    {
-      this.ctx.moveTo(x_scale*t+zero_pos_x, -1*y_scale+zero_pos_y);
-      this.ctx.lineTo(x_scale*t+zero_pos_x, +1*y_scale+zero_pos_y);
-    }
-    this.ctx.stroke();
-
-
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = 'white';
-    this.ctx.lineWidth = 2;
-    this.ctx.moveTo(x_scale*t0+zero_pos_x, -y_scale*f(t0)+zero_pos_y);
-    for(let t = t0 + 1; t <= x_scale*t1; t += 1)
-    {
-      this.ctx.lineTo(t+zero_pos_x, -y_scale*f(t/x_scale)+zero_pos_y);
-    }
-    this.ctx.stroke();
-  }
-
-  draw_func_on_circle(
-    f: (v: number)=>number, 
-    t0: number, t1: number,
-    pos_x: number, pos_y: number,
-    cycles_per_t: number,
-    scale: number,
-  )
-  {
-    this.circle(pos_x, pos_y, 2, 'green');
-
-    this.ctx.strokeStyle = 'blue';
-    this.line(pos_x-scale, pos_y, pos_x+scale, pos_y);
-    this.line(pos_x, pos_y-scale, pos_x, pos_y+scale);
-
-    if(cycles_per_t < 0.000001)cycles_per_t = 0.000001;
-    let step = 1 / tau / scale / cycles_per_t;
-
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = 'red';
-    this.ctx.lineWidth = 1;
-    let first = true;
-    for(let i=0; ; i++)
-    {
-      const t = i * step;
-      if(t0 + t > t1)break;
-      const angle = t * cycles_per_t * tau;
-      const amp = f(t);
-      const g_scale = 1;
-      let px = g_scale*scale*amp*cos(angle) + pos_x;
-      let py = g_scale*scale*amp*sin(angle) + pos_y;
-      if(first)this.ctx.moveTo(px, py), first = false;
-      this.ctx.lineTo(px, py);
-    }
-    this.ctx.stroke();
-  }
-
   graph_anm_start = this.current_time;
   graph_anm_t = 0;
 
   update(){
-    const duration = 15;
+    const duration = 40;
     this.graph_anm_t = (this.current_time - this.graph_anm_start) / duration;
     while(this.graph_anm_t > 1)this.graph_anm_t -= 1;
   }
@@ -118,62 +20,58 @@ class App
     this.ctx.fillStyle = 'black';
     this.ctx.fillRect(0, 0, this.width, this.height);
 
+    // range of target function to be analyzed.
     const start_t = 0;
-    const end_t = 4;
+    const end_t = 6;
 
     const hz1 = 3;
     const hz2 = 2;
-    const f = (x: number) => cos(hz1 * x*tau) + cos(hz2 * x*tau) + 2;
+    // target function for analysis, (sum of two frequencies hz1 and hz2).
+    const f = (x: number) => cos(hz1 * x*tau) + cos(hz2 * x*tau);
+
+    // draw the target function.
     this.draw_func(
       f, 
       start_t, end_t,
       80, 170,
-      160, 40
+      680/(end_t-start_t), 40
     );
 
-    const cycle_per_second = 4 *(1-abs(2*this.graph_anm_t-1));
+    // Animate forward and backward by mapping the timer from [0 - 1] to [0 - 1 - 0].
+    const anm_t = 4 * (1-abs(2*this.graph_anm_t-1));
 
+    // frequency to be tried (it is animated using the timer graph_anm_t).
+    const cycle_per_second = anm_t;
+
+    // Draw the wave around the unit circle as inspired 3blue1brown YT channel.
+    // https://www.youtube.com/watch?v=spUNpyF58BY
     this.draw_func_on_circle(
       f, 
       start_t, end_t,
-      200, 400, 
-      cycle_per_second, 
-      40
+      160, 400, // position
+      cycle_per_second, // cycles per t
+      60 // scale
     );
+
+    // Number of samples.
+    const N = 100;
+      
+    // Fourier Transform
+    // this is the real part
+    const ft_r = (fq: number) => sum(rng2(start_t, end_t, N).map(t => f(t) * cos(-tau*fq*t)));
+    // this is the imaginary/complex part
+    const ft_c = (fq: number) => sum(rng2(start_t, end_t, N).map(t => f(t) * sin(-tau*fq*t)));
     
-    // let sum_px = 0;
-    // let sum_py = 0;
-    // let point_count = 0;
-    // sum_px += px; sum_py += py;
-    // point_count++;
-    // this.circle(sum_px/point_count, sum_py/point_count, 5, 'yellow');
-  }
-  circle(x: number, y: number, radius: number, color: string){
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = color;
-    this.ctx.fillStyle = color;
-    this.ctx.arc(x, y, radius, 0, tau);
-    this.ctx.fill();
-  }
-
-  render_loop(time: number){
-
-    time /= 1000;
-    this.dt = time - this.last_time;
-    this.last_time = this.current_time;
-    this.current_time = time;
-
-    this.update();
-
-    this.ctx.clearRect(0, 0, this.width, this.height);
-    // console.log();
-    this.draw();
-
-    requestAnimationFrame(this.render_loop.bind(this));
+    // Draw the real part of fourier
+    this.draw_func(
+      // Fourier is just the sum/integration, which results large values, 
+      // normalize them to fit on the screen.
+      (fq) => ft_r(fq)/N,
+      0, cycle_per_second,
+      400, 390, // position
+      80, 90 // scale
+    );
   }
 }
 
-window.addEventListener('load', () => {
-  const app = new App();
-  app.init();
-});
+(new App()).run();
